@@ -104,9 +104,7 @@ impl Statement<'_> {
             // clippy::or_fun_call (nightly) vs clippy::unnecessary-lazy-evaluations (stable)
             .ok_or(Error::InvalidColumnIndex(col))
             .map(|slice| {
-                slice
-                    .to_str()
-                    .expect("Invalid UTF-8 sequence in column name")
+                str::from_utf8(slice.to_bytes()).expect("Invalid UTF-8 sequence in column name")
             })
     }
 
@@ -151,8 +149,7 @@ impl Statement<'_> {
             let name = self.column_name_unwrap(i);
             let slice = self.stmt.column_decltype(i);
             let decl_type = slice.map(|s| {
-                s.to_str()
-                    .expect("Invalid UTF-8 sequence in column declaration")
+                str::from_utf8(s.to_bytes()).expect("Invalid UTF-8 sequence in column declaration")
             });
             cols.push(Column { name, decl_type });
         }

@@ -3,6 +3,7 @@ use super::{Null, Value, ValueRef};
 use crate::vtab::array::Array;
 use crate::{Error, Result};
 use std::borrow::Cow;
+use std::convert::TryFrom;
 
 /// `ToSqlOutput` represents the possible output types for implementers of the
 /// [`ToSql`] trait.
@@ -310,23 +311,9 @@ impl<T: ToSql> ToSql for Option<T> {
 
 #[cfg(test)]
 mod test {
-    use super::{ToSql, ToSqlOutput};
-    use crate::{types::Value, types::ValueRef, Result};
+    use super::ToSql;
 
     fn is_to_sql<T: ToSql>() {}
-
-    #[test]
-    fn to_sql() -> Result<()> {
-        assert_eq!(
-            ToSqlOutput::Borrowed(ValueRef::Null).to_sql()?,
-            ToSqlOutput::Borrowed(ValueRef::Null)
-        );
-        assert_eq!(
-            ToSqlOutput::Owned(Value::Null).to_sql()?,
-            ToSqlOutput::Borrowed(ValueRef::Null)
-        );
-        Ok(())
-    }
 
     #[test]
     fn test_integral_types() {

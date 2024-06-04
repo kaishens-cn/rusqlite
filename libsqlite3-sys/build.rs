@@ -156,34 +156,25 @@ mod build_bundled {
             let (lib_dir, inc_dir) = match (lib_dir, inc_dir) {
                 (Some(lib_dir), Some(inc_dir)) => {
                     use_openssl = true;
-                    (vec![lib_dir], inc_dir)
+                    (lib_dir, inc_dir)
                 }
                 (lib_dir, inc_dir) => match find_openssl_dir(&host, &target) {
                     None => {
                         if is_windows && !cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
                             panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
                         } else {
-                            (vec![PathBuf::new()], PathBuf::new())
+                            (PathBuf::new(), PathBuf::new())
                         }
                     }
                     Some(openssl_dir) => {
-                        let lib_dir = lib_dir.map(|d| vec![d]).unwrap_or_else(|| {
-                            let mut lib_dirs = vec![];
-                            // OpenSSL 3.0 now puts it's libraries in lib64/ by default,
-                            // check for both it and lib/.
-                            if openssl_dir.join("lib64").exists() {
-                                lib_dirs.push(openssl_dir.join("lib64"));
-                            }
-                            if openssl_dir.join("lib").exists() {
-                                lib_dirs.push(openssl_dir.join("lib"));
-                            }
-                            lib_dirs
-                        });
+                        let lib_dir = lib_dir.unwrap_or_else(|| openssl_dir.join("lib"));
                         let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
 
-                        if !lib_dir.iter().all(|p| p.exists()) {
-                            panic!("OpenSSL library directory does not exist: {:?}", lib_dir);
-                        }
+                        assert!(
+                            Path::new(&lib_dir).exists(),
+                            "OpenSSL library directory does not exist: {}",
+                            lib_dir.to_string_lossy()
+                        );
 
                         if !Path::new(&inc_dir).exists() {
                             panic!(
@@ -206,9 +197,7 @@ mod build_bundled {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
                 let lib_name = if is_windows { "libcrypto" } else { "crypto" };
                 println!("cargo:rustc-link-lib=dylib={}", lib_name);
-                for lib_dir_item in lib_dir.iter() {
-                    println!("cargo:rustc-link-search={}", lib_dir_item.to_string_lossy());
-                }
+                println!("cargo:rustc-link-search={}", lib_dir.to_string_lossy());
             } else if is_apple {
                 cfg.flag("-DSQLCIPHER_CRYPTO_CC");
                 println!("cargo:rustc-link-lib=framework=Security");
@@ -498,8 +487,8 @@ mod build_linked {
 }
 
 #[cfg(not(feature = "buildtime_bindgen"))]
-#[allow(dead_code)]
 mod bindings {
+    #![allow(dead_code)]
     use super::HeaderLocation;
 
     use std::path::Path;
@@ -565,8 +554,8 @@ mod bindings {
         xEntryPoint: ::std::option::Option<
             unsafe extern "C" fn(
                 db: *mut sqlite3,
-                pzErrMsg: *mut *mut ::std::os::raw::c_char,
-                _: *const sqlite3_api_routines,
+                pzErrMsg: *mut *const ::std::os::raw::c_char,
+                pThunk: *const sqlite3_api_routines,
             ) -> ::std::os::raw::c_int,
         >,
     ) -> ::std::os::raw::c_int;
@@ -579,19 +568,13 @@ mod bindings {
         xEntryPoint: ::std::option::Option<
             unsafe extern "C" fn(
                 db: *mut sqlite3,
-                pzErrMsg: *mut *mut ::std::os::raw::c_char,
-                _: *const sqlite3_api_routines,
+                pzErrMsg: *mut *const ::std::os::raw::c_char,
+                pThunk: *const sqlite3_api_routines,
             ) -> ::std::os::raw::c_int,
         >,
     ) -> ::std::os::raw::c_int;
 }"#,
-                )
-                .blocklist_function(".*16.*")
-                .blocklist_function("sqlite3_close_v2")
-                .blocklist_function("sqlite3_create_collation")
-                .blocklist_function("sqlite3_create_function")
-                .blocklist_function("sqlite3_create_module")
-                .blocklist_function("sqlite3_prepare");
+                );
         }
 
         if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
@@ -688,20 +671,13 @@ mod loadable_extension {
             let ident = field.ident.expect("unnamed field");
             let span = ident.span();
             let name = ident.to_string();
-            if name.contains("16") {
-                continue; // skip UTF-16 api as rust uses UTF-8
-            } else if name == "vmprintf" || name == "xvsnprintf" || name == "str_vappendf" {
+            if name == "vmprintf" || name == "xvsnprintf" || name == "str_vappendf" {
                 continue; // skip va_list
             } else if name == "aggregate_count"
                 || name == "expired"
                 || name == "global_recover"
                 || name == "thread_cleanup"
                 || name == "transfer_bindings"
-                || name == "create_collation"
-                || name == "create_function"
-                || name == "create_module"
-                || name == "prepare"
-                || name == "close_v2"
             {
                 continue; // omit deprecated
             }

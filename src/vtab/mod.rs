@@ -11,6 +11,7 @@
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::marker::PhantomData;
+use std::marker::Sync;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::slice;
@@ -759,9 +760,10 @@ impl Values<'_> {
             None
         } else {
             Some(unsafe {
-                let ptr = ptr as *const Vec<Value>;
-                array::Array::increment_strong_count(ptr); // don't consume it
-                array::Array::from_raw(ptr)
+                let rc = array::Array::from_raw(ptr as *const Vec<Value>);
+                let array = rc.clone();
+                array::Array::into_raw(rc); // don't consume it
+                array
             })
         }
     }
@@ -922,7 +924,7 @@ pub fn parameter(c_slice: &[u8]) -> Result<(&str, &str)> {
     if let Some(key) = split.next() {
         if let Some(value) = split.next() {
             let param = key.trim();
-            let value = dequote(value.trim());
+            let value = dequote(value);
             return Ok((param, value));
         }
     }
@@ -1080,12 +1082,12 @@ where
     }
 }
 
-unsafe extern "C" fn rust_open<'vtab, T>(
+unsafe extern "C" fn rust_open<'vtab, T: 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
     pp_cursor: *mut *mut ffi::sqlite3_vtab_cursor,
 ) -> c_int
 where
-    T: VTab<'vtab> + 'vtab,
+    T: VTab<'vtab>,
 {
     let vt = vtab.cast::<T>();
     match (*vt).open() {
@@ -1186,14 +1188,14 @@ where
     }
 }
 
-unsafe extern "C" fn rust_update<'vtab, T>(
+unsafe extern "C" fn rust_update<'vtab, T: 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
     argc: c_int,
     argv: *mut *mut ffi::sqlite3_value,
     p_rowid: *mut ffi::sqlite3_int64,
 ) -> c_int
 where
-    T: UpdateVTab<'vtab> + 'vtab,
+    T: UpdateVTab<'vtab>,
 {
     assert!(argc >= 1);
     let args = slice::from_raw_parts_mut(argv, argc as usize);

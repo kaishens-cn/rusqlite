@@ -7,6 +7,7 @@ extern crate openssl_sys;
 
 pub use self::error::*;
 
+use std::default::Default;
 use std::mem;
 
 mod error;
@@ -18,7 +19,7 @@ pub fn SQLITE_STATIC() -> sqlite3_destructor_type {
 
 #[must_use]
 pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
-    Some(unsafe { mem::transmute::<isize, unsafe extern "C" fn(*mut std::ffi::c_void)>(-1_isize) })
+    Some(unsafe { mem::transmute(-1_isize) })
 }
 
 #[allow(clippy::all)]

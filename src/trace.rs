@@ -27,9 +27,10 @@ use crate::Connection;
 #[cfg(not(feature = "loadable_extension"))]
 pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> crate::Result<()> {
     extern "C" fn log_callback(p_arg: *mut c_void, err: c_int, msg: *const c_char) {
-        let s = unsafe { CStr::from_ptr(msg).to_string_lossy() };
+        let c_slice = unsafe { CStr::from_ptr(msg).to_bytes() };
         let callback: fn(c_int, &str) = unsafe { mem::transmute(p_arg) };
 
+        let s = String::from_utf8_lossy(c_slice);
         drop(catch_unwind(|| callback(err, &s)));
     }
 
@@ -71,7 +72,8 @@ impl Connection {
     pub fn trace(&mut self, trace_fn: Option<fn(&str)>) {
         unsafe extern "C" fn trace_callback(p_arg: *mut c_void, z_sql: *const c_char) {
             let trace_fn: fn(&str) = mem::transmute(p_arg);
-            let s = CStr::from_ptr(z_sql).to_string_lossy();
+            let c_slice = CStr::from_ptr(z_sql).to_bytes();
+            let s = String::from_utf8_lossy(c_slice);
             drop(catch_unwind(|| trace_fn(&s)));
         }
 
@@ -98,7 +100,8 @@ impl Connection {
             nanoseconds: u64,
         ) {
             let profile_fn: fn(&str, Duration) = mem::transmute(p_arg);
-            let s = CStr::from_ptr(z_sql).to_string_lossy();
+            let c_slice = CStr::from_ptr(z_sql).to_bytes();
+            let s = String::from_utf8_lossy(c_slice);
             const NANOS_PER_SEC: u64 = 1_000_000_000;
 
             let duration = Duration::new(

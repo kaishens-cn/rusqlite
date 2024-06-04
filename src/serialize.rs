@@ -1,4 +1,5 @@
 //! Serialize a database.
+use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::NonNull;
@@ -135,6 +136,7 @@ impl Connection {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{Connection, DatabaseName, Result};
 
     #[test]
     fn serialize() -> Result<()> {
